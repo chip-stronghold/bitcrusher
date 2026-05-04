@@ -1,1 +1,470 @@
-/* placeholder */
+/* ============================================================
+   BITCRUSHER — 16-BIT RETRO ARCADE UI
+   Palette mimics SNES / arcade CRT: deep purple bg, neon cyan
+   accents, hot pink highlights, magenta/yellow flair, pixel
+   borders made from layered box-shadows (no images, no svg).
+   ============================================================ */
+
+:root {
+  --bg-0: #0b0524;
+  --bg-1: #1a1146;
+  --bg-2: #2a1f6e;
+  --ink: #f4f0ff;
+  --ink-dim: #b8a8ff;
+  --cyan: #38e8ff;
+  --pink: #ff3aa3;
+  --magenta: #ff2af2;
+  --yellow: #ffd83a;
+  --red: #ff2a3a;
+  --green: #4cff7a;
+  --shadow: #000;
+  --px: 4px;                 /* pixel unit */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--bg-0);
+  color: var(--ink);
+  font-family: "VT323", ui-monospace, "Courier New", monospace;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  image-rendering: pixelated;
+  overflow-x: hidden;
+}
+
+body {
+  /* radial spotlight + checker noise */
+  background:
+    radial-gradient(ellipse at 50% 0%, var(--bg-2) 0%, var(--bg-1) 40%, var(--bg-0) 100%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 3px);
+  min-height: 100vh;
+  padding: clamp(12px, 3vw, 28px);
+}
+
+/* ---------- CRT overlays ---------- */
+.scanlines {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.18) 0 2px,
+    transparent 2px 4px
+  );
+  mix-blend-mode: multiply;
+  z-index: 100;
+}
+.crt {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  z-index: 101;
+}
+
+/* ---------- Cabinet (main container) ---------- */
+.cabinet {
+  max-width: 560px;
+  margin: 0 auto;
+  display: grid;
+  gap: clamp(14px, 3vw, 22px);
+}
+
+/* ---------- Marquee / title ---------- */
+.marquee {
+  text-align: center;
+  padding: 14px 8px 10px;
+}
+.title {
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(22px, 6.5vw, 38px);
+  letter-spacing: 2px;
+  margin: 0;
+  color: var(--yellow);
+  text-shadow:
+    0 var(--px) 0 var(--pink),
+    0 calc(var(--px) * 2) 0 var(--magenta),
+    0 calc(var(--px) * 3) 0 #5a0a55,
+    0 0 18px rgba(255, 58, 163, 0.55);
+  position: relative;
+}
+.title::before {
+  content: attr(data-text);
+  position: absolute; left: 0; right: 0; top: 0;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(56,232,255,0.35);
+  pointer-events: none;
+}
+.sub {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  margin: 10px 0 0;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  text-shadow: 0 2px 0 #003a47;
+}
+
+/* ---------- Pixel border helper (fake 4-side outline) ---------- */
+.pixel-frame,
+.screen,
+.panel {
+  position: relative;
+  background: linear-gradient(180deg, #120931, #1f1452 100%);
+  padding: 18px;
+  /* layered box-shadow draws a chunky 2-tone pixel border */
+  box-shadow:
+    0 0 0 var(--px) #000,
+    0 0 0 calc(var(--px) * 2) var(--cyan),
+    0 0 0 calc(var(--px) * 3) #000,
+    inset 0 0 0 var(--px) rgba(255,255,255,0.04),
+    0 calc(var(--px) * 2) 0 #000;
+  border-radius: 2px;
+}
+.screen { padding: 22px 18px 18px; }
+
+/* ---------- HUD bar ---------- */
+.hud {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-dim);
+  border-bottom: 2px dashed rgba(56,232,255,0.35);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+.hud-label { color: var(--ink-dim); }
+.hud-value {
+  color: var(--yellow);
+  text-shadow: 0 2px 0 #553f00;
+}
+.hud-spacer { flex: 1; }
+
+/* ---------- Stage with REC button ---------- */
+.stage {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 18px 0 8px;
+}
+
+.rec-dot {
+  width: 14px; height: 14px;
+  background: var(--red);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 12px var(--red);
+  opacity: 0.25;
+  transition: opacity 0.1s linear;
+}
+.recording .rec-dot {
+  opacity: 1;
+  animation: pulse 0.6s steps(2, jump-none) infinite;
+}
+@keyframes pulse {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.25; }
+}
+
+/* The big chunky arcade button */
+.btn-rec {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  width: clamp(140px, 38vw, 180px);
+  height: clamp(140px, 38vw, 180px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff7080, var(--red) 55%, #8a000d 100%);
+  color: #fff;
+  font-family: "Press Start 2P", monospace;
+  font-size: clamp(22px, 6vw, 30px);
+  letter-spacing: 2px;
+  /* outer ring + drop shadow give the chunky arcade feel */
+  box-shadow:
+    0 0 0 6px #000,
+    0 0 0 12px #2a0410,
+    0 0 0 16px #000,
+    0 10px 0 #000,
+    0 12px 24px rgba(255, 42, 58, 0.45),
+    inset 0 -10px 0 rgba(0,0,0,0.35),
+    inset 0 6px 0 rgba(255,255,255,0.18);
+  transition: transform 0.08s linear, box-shadow 0.08s linear;
+  text-shadow: 0 2px 0 #5a0008;
+  position: relative;
+}
+.btn-rec-inner { display: block; transform: translateY(-2px); }
+.btn-rec:hover { filter: brightness(1.05); }
+.btn-rec:active,
+.recording .btn-rec {
+  transform: translateY(6px);
+  box-shadow:
+    0 0 0 6px #000,
+    0 0 0 12px #2a0410,
+    0 0 0 16px #000,
+    0 4px 0 #000,
+    0 8px 16px rgba(255, 42, 58, 0.45),
+    inset 0 -6px 0 rgba(0,0,0,0.35),
+    inset 0 4px 0 rgba(255,255,255,0.12);
+}
+.recording .btn-rec {
+  background: radial-gradient(circle at 35% 30%, #ffd83a, #ff8a00 55%, #5a3000 100%);
+  text-shadow: 0 2px 0 #4a2a00;
+}
+
+.btn-rec:focus-visible {
+  outline: 3px dashed var(--cyan);
+  outline-offset: 18px;
+}
+
+.hint {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  color: var(--cyan);
+  margin: 6px 0 0;
+  letter-spacing: 1px;
+  text-align: center;
+  text-shadow: 0 2px 0 #003a47;
+}
+
+/* ---------- Stepped meter (decorative health-bar look) ---------- */
+.meter {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  margin-top: 18px;
+}
+.meter span {
+  height: 12px;
+  background: #1a0c3d;
+  box-shadow: inset 0 0 0 1px #000;
+}
+.meter span:nth-child(-n+4) { background: var(--green); box-shadow: inset 0 -3px 0 #1c7a2f, inset 0 0 0 1px #000; }
+.meter span:nth-child(n+5):nth-child(-n+8) { background: var(--yellow); box-shadow: inset 0 -3px 0 #7a6210, inset 0 0 0 1px #000; }
+.meter span:nth-child(n+9) { background: var(--red); box-shadow: inset 0 -3px 0 #6a0a14, inset 0 0 0 1px #000; }
+.recording .meter span { animation: meterFlicker 0.4s steps(2) infinite; }
+@keyframes meterFlicker {
+  50% { filter: brightness(1.6); }
+}
+
+/* ---------- Control panel ---------- */
+.panel {
+  display: grid;
+  gap: 14px;
+}
+.panel-row {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.lbl {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  text-shadow: 0 2px 0 #003a47;
+}
+
+/* select styled as a chunky pixel box */
+.select-wrap { position: relative; }
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background: #0a0428;
+  color: var(--yellow);
+  font-family: "VT323", monospace;
+  font-size: 22px;
+  letter-spacing: 1px;
+  border: 0;
+  padding: 10px 32px 10px 12px;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 2px var(--magenta),
+    0 4px 0 #000;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.select-wrap::after {
+  content: "▼";
+  position: absolute;
+  right: 14px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--magenta);
+  pointer-events: none;
+  font-size: 14px;
+}
+
+/* readout boxes */
+.readout {
+  display: inline-block;
+  min-width: 64px;
+  text-align: center;
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  color: var(--yellow);
+  background: #0a0428;
+  padding: 8px 6px;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 2px var(--cyan),
+    0 3px 0 #000;
+  text-shadow: 0 2px 0 #553f00;
+}
+
+/* ---------- Slider (chunky pixel track + square thumb) ---------- */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  margin: 0;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 14px;
+  background:
+    linear-gradient(90deg, var(--cyan) 0 var(--fill, 0%), #1a0c3d var(--fill, 0%) 100%);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.slider::-moz-range-track {
+  height: 14px;
+  background:
+    linear-gradient(90deg, var(--cyan) 0 var(--fill, 0%), #1a0c3d var(--fill, 0%) 100%);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 26px;
+  margin-top: -6px;
+  background: var(--yellow);
+  border: 0;
+  border-radius: 0;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -4px 0 #a07e00,
+    inset 0 3px 0 rgba(255,255,255,0.45);
+  cursor: ew-resize;
+}
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 26px;
+  background: var(--yellow);
+  border: 0;
+  border-radius: 0;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -4px 0 #a07e00,
+    inset 0 3px 0 rgba(255,255,255,0.45);
+  cursor: ew-resize;
+}
+.slider:focus-visible {
+  outline: 2px dashed var(--magenta);
+  outline-offset: 6px;
+}
+
+/* ---------- Preview panel ---------- */
+.preview-panel { gap: 16px; }
+audio {
+  width: 100%;
+  filter: hue-rotate(190deg) saturate(1.2) contrast(1.05);
+  border-radius: 2px;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btn {
+  appearance: none;
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 14px 10px;
+  border: 0;
+  cursor: pointer;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.5);
+  transition: transform 0.06s linear, box-shadow 0.06s linear, filter 0.1s linear;
+  border-radius: 2px;
+  user-select: none;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: linear-gradient(180deg, #4cff7a, #1c9c40);
+  color: #082a10;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.25);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -5px 0 #0c5a22,
+    inset 0 3px 0 rgba(255,255,255,0.35),
+    0 6px 0 #000;
+}
+.btn-alt {
+  background: linear-gradient(180deg, #ff3aa3, #b41566);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -5px 0 #5a0a35,
+    inset 0 3px 0 rgba(255,255,255,0.25),
+    0 6px 0 #000;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -3px 0 rgba(0,0,0,0.4),
+    inset 0 2px 0 rgba(255,255,255,0.2),
+    0 3px 0 #000;
+}
+.btn:disabled,
+.btn.disabled,
+a.btn[aria-disabled="true"] {
+  filter: grayscale(0.65) brightness(0.55);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.btn:focus-visible { outline: 2px dashed var(--cyan); outline-offset: 4px; }
+
+/* ---------- Footer ---------- */
+.coin {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  color: var(--ink-dim);
+  text-align: center;
+  letter-spacing: 2px;
+  padding: 8px 0 18px;
+}
+.blink {
+  color: var(--yellow);
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- Responsive small tweaks ---------- */
+@media (max-width: 420px) {
+  .panel-row { grid-template-columns: 56px 1fr auto; gap: 10px; }
+  .lbl { font-size: 9px; }
+  .readout { font-size: 10px; min-width: 56px; }
+  .actions { grid-template-columns: 1fr; }
+}
+
+/* Reduced-motion respects user pref */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

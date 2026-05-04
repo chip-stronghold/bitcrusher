@@ -1,1 +1,89 @@
-<!-- placeholder -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1a1146">
+<title>BITCRUSHER ][</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="crt" aria-hidden="true"></div>
+
+  <main class="cabinet">
+    <header class="marquee">
+      <h1 class="title" data-text="BITCRUSHER">BITCRUSHER</h1>
+      <p class="sub">★ 16-BIT AUDIO CRUNCHER ★</p>
+    </header>
+
+    <section class="screen" aria-label="recorder">
+      <div class="hud">
+        <span class="hud-label">STATUS</span>
+        <span id="status" class="hud-value">READY</span>
+        <span class="hud-spacer"></span>
+        <span class="hud-label">TIME</span>
+        <span id="timer" class="hud-value">5.0</span>
+      </div>
+
+      <div class="stage">
+        <div id="rec-indicator" class="rec-dot" aria-hidden="true"></div>
+        <button id="record" class="btn-rec" type="button" aria-label="Record">
+          <span class="btn-rec-inner">REC</span>
+        </button>
+        <p id="hint" class="hint">PRESS START TO RECORD 5 SEC</p>
+      </div>
+
+      <div class="meter" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="effect controls">
+      <div class="panel-row">
+        <label class="lbl" for="preset">PRESET</label>
+        <div class="select-wrap">
+          <select id="preset" class="select">
+            <option value="clean">CLEAN — 16 BIT / 44100 HZ</option>
+            <option value="snes" selected>SNES — 8 BIT / 16000 HZ</option>
+            <option value="arcade">ARCADE — 6 BIT / 11025 HZ</option>
+            <option value="destroyed">DESTROYED — 4 BIT / 8000 HZ</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="bits">BITS</label>
+        <input id="bits" class="slider" type="range" min="1" max="16" step="1" value="8">
+        <output id="bits-val" class="readout">08</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="rate">RATE</label>
+        <input id="rate" class="slider" type="range" min="2000" max="44100" step="100" value="16000">
+        <output id="rate-val" class="readout">16000</output>
+      </div>
+    </section>
+
+    <section class="panel preview-panel" aria-label="preview and export">
+      <audio id="preview" controls preload="metadata"></audio>
+      <div class="actions">
+        <button id="reset" class="btn btn-alt" type="button" disabled>RESET</button>
+        <a id="download" class="btn btn-primary disabled" role="button" aria-disabled="true" download>DOWNLOAD WAV</a>
+      </div>
+    </section>
+
+    <footer class="coin">
+      <span class="blink">★</span> INSERT COIN TO CONTINUE <span class="blink">★</span>
+    </footer>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
