@@ -15,6 +15,8 @@ const rateVal = $("rate-val");
 const audio = $("preview");
 const downloadEl = $("download");
 const resetBtn = $("reset");
+const loadFxBtn = $("load-fx");
+const fileInput = $("file-input");
 
 // ---------------- State ----------------
 const MAX_DURATION = 5;       // seconds
@@ -31,6 +33,7 @@ let recordingState = null;    // { stream, source, node, chunks, ctx, raf }
 let sourceBuffer = null;      // captured AudioBuffer (raw)
 let crushedUrl = null;        // current object URL on the audio/download
 let renderToken = 0;          // cancel stale renders
+let sourceLabel = "recording"; // "recording" | basename of uploaded file — drives download name
 
 // ---------------- Init ----------------
 applyPreset(presetSel.value);
@@ -168,11 +171,68 @@ function stopRecording() {
   const buf = ctx.createBuffer(1, total, ctx.sampleRate);
   buf.getChannelData(0).set(merged);
   sourceBuffer = buf;
+  sourceLabel = "recording";
 
   setStatus("CRUNCH");
   hint.textContent = "TAP REC TO TRY AGAIN";
   resetBtn.disabled = false;
   scheduleRender();
+}
+
+// ---------------- Upload sound FX ----------------
+loadFxBtn.addEventListener("click", () => {
+  if (recordingState) return; // ignore while actively recording
+  fileInput.value = ""; // allow re-selecting the same file
+  fileInput.click();
+});
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  try {
+    await loadFxFile(file);
+  } catch (err) {
+    handleUploadError(err);
+  }
+});
+
+async function loadFxFile(file) {
+  setStatus("DECODE");
+  hint.textContent = `DECODING ${truncate(file.name, 18).toUpperCase()}…`;
+
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  const arrayBuf = await file.arrayBuffer();
+  // Safari needs the callback form for some legacy versions; promise form works in all modern browsers.
+  const decoded = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+  sourceBuffer = decoded;
+  sourceLabel = sanitizeBasename(file.name) || "fx";
+
+  setStatus("CRUNCH");
+  hint.textContent = `LOADED ${truncate(file.name, 18).toUpperCase()} — TWEAK & DOWNLOAD`;
+  resetBtn.disabled = false;
+  timer.textContent = decoded.duration.toFixed(1);
+  scheduleRender();
+}
+
+function handleUploadError(err) {
+  console.error("[bitcrusher] upload error:", err);
+  setStatus("ERR");
+  if (err && (err.name === "EncodingError" || err.name === "NotSupportedError")) {
+    hint.textContent = "UNSUPPORTED FORMAT — TRY WAV/MP3/M4A/OGG";
+  } else {
+    hint.textContent = "COULD NOT DECODE — SEE CONSOLE";
+  }
+}
+
+function sanitizeBasename(name) {
+  const noExt = name.replace(/\.[^.]+$/, "");
+  return noExt.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 40);
+}
+
+function truncate(s, n) {
+  return s.length <= n ? s : s.slice(0, n - 1) + "…";
 }
 
 function handleRecordError(err) {
@@ -211,7 +271,8 @@ async function render() {
     crushedUrl = URL.createObjectURL(blob);
     audio.src = crushedUrl;
     downloadEl.href = crushedUrl;
-    downloadEl.setAttribute("download", `bitcrush-${timestamp()}.wav`);
+    const prefix = sourceLabel === "recording" ? "bitcrush" : `bitcrush-${sourceLabel}`;
+    downloadEl.setAttribute("download", `${prefix}-${bits}b-${rate}hz-${timestamp()}.wav`);
     downloadEl.classList.remove("disabled");
     downloadEl.setAttribute("aria-disabled", "false");
     setStatus("READY");
@@ -266,6 +327,7 @@ function syncFill(input) {
 // ---------------- Reset ----------------
 resetBtn.addEventListener("click", () => {
   sourceBuffer = null;
+  sourceLabel = "recording";
   if (crushedUrl) { URL.revokeObjectURL(crushedUrl); crushedUrl = null; }
   audio.removeAttribute("src"); audio.load();
   downloadEl.removeAttribute("href");

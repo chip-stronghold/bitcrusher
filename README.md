@@ -4,6 +4,8 @@ A no-build, single-page web app that records up to 5 seconds of microphone audio
 
 Pure HTML, CSS, and ES modules. No frameworks, no bundler, no npm.
 
+Either tap **REC** to capture 5 seconds from the mic, or tap **LOAD SOUND FX** to upload an existing audio file (WAV / MP3 / M4A / OGG — anything `AudioContext.decodeAudioData` accepts). Both paths feed the same crush pipeline, so presets and sliders work the same on a recording or an uploaded sample.
+
 ## Run locally
 
 The mic API requires a secure context, so you can't just `open index.html` (mic on `file://` is blocked on most platforms). Serve over HTTP locally and visit it in a browser:
@@ -38,4 +40,6 @@ Sliders override either value; selecting a preset snaps both back. Moving a slid
 4. `wav-encoder.js` writes a 44-byte RIFF header and 16-bit PCM samples into a `Blob`.
 5. The `Blob` becomes both the `<audio>` source and the download link.
 
-Re-rendering happens entirely from the stored source buffer, so changing a preset never re-records.
+Re-rendering happens entirely from the stored source buffer, so changing a preset never re-records (and never re-decodes).
+
+The download filename embeds the source name, bit depth, and target rate — e.g. `bitcrush-laser-zap-4b-8000hz-20260602-113802.wav`.

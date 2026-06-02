@@ -233,6 +233,50 @@ body {
   text-shadow: 0 2px 0 #003a47;
 }
 
+/* "OR" divider between REC and LOAD FX */
+.divider {
+  position: relative;
+  width: 80%;
+  margin: 14px 0 4px;
+  text-align: center;
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  color: var(--ink-dim);
+  letter-spacing: 2px;
+}
+.divider::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    rgba(56,232,255,0.35) 0 6px,
+    transparent 6px 12px
+  );
+  z-index: 0;
+}
+.divider span {
+  position: relative;
+  z-index: 1;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #120931, #1f1452 100%);
+}
+
+/* LOAD SOUND FX button — cyan chunky pixel variant */
+.btn-load {
+  background: linear-gradient(180deg, #38e8ff, #0a6a82);
+  color: #022028;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.3);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 -5px 0 #054d5e,
+    inset 0 3px 0 rgba(255,255,255,0.35),
+    0 6px 0 #000;
+  padding: 14px 20px;
+  font-size: 12px;
+}
+
 /* ---------- Stepped meter (decorative health-bar look) ---------- */
 .meter {
   display: grid;
