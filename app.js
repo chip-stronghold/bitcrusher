@@ -19,6 +19,13 @@ const tabCrush = $("tab-crush");
 const tabGranny = $("tab-granny");
 const panelCrush = $("panel-crush");
 const panelGranny = $("panel-granny");
+const marqueeTitle = $("marquee-title");
+const marqueeSub = $("marquee-sub");
+
+const MARQUEE = {
+  crush:  { title: "BITCRUSHER", sub: "★ 16-BIT AUDIO CRUNCHER ★", page: "BITCRUSHER ][" },
+  granny: { title: "GRANNY VO",  sub: "★ OLD-LADY VOICE PROCESSOR ★", page: "GRANNY VO ][" },
+};
 
 // Bitcrusher controls
 const presetSel = $("preset");
@@ -81,6 +88,11 @@ function updateModeUI() {
   tabGranny.classList.toggle("is-active", mode === "granny");
   panelCrush.hidden = mode !== "crush";
   panelGranny.hidden = mode !== "granny";
+  const m = MARQUEE[mode];
+  marqueeTitle.textContent = m.title;
+  marqueeTitle.setAttribute("data-text", m.title);
+  marqueeSub.textContent = m.sub;
+  document.title = m.page;
   if (!sourceBuffer && !recordingState) {
     hint.textContent = mode === "crush"
       ? `PRESS START TO RECORD ${MAX_DURATION_CRUSH} SEC`
