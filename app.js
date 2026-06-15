@@ -1,4 +1,5 @@
 import { crush } from "./crusher.js";
+import { makeGranny, GRANNY_PRESETS } from "./granny.js";
 import { encodeWAV } from "./wav-encoder.js";
 
 // ---------------- DOM ----------------
@@ -7,19 +8,40 @@ const recordBtn = $("record");
 const status = $("status");
 const timer = $("timer");
 const hint = $("hint");
-const presetSel = $("preset");
-const bitsEl = $("bits");
-const rateEl = $("rate");
-const bitsVal = $("bits-val");
-const rateVal = $("rate-val");
 const audio = $("preview");
 const downloadEl = $("download");
 const resetBtn = $("reset");
 const loadFxBtn = $("load-fx");
 const fileInput = $("file-input");
 
+// Mode tabs + panels
+const tabCrush = $("tab-crush");
+const tabGranny = $("tab-granny");
+const panelCrush = $("panel-crush");
+const panelGranny = $("panel-granny");
+
+// Bitcrusher controls
+const presetSel = $("preset");
+const bitsEl = $("bits");
+const rateEl = $("rate");
+const bitsVal = $("bits-val");
+const rateVal = $("rate-val");
+
+// Granny controls
+const grannyPresetSel = $("granny-preset");
+const pitchEl = $("pitch");
+const wobbleEl = $("wobble");
+const wobbleRateEl = $("wobble-rate");
+const ageEl = $("age");
+const pitchVal = $("pitch-val");
+const wobbleVal = $("wobble-val");
+const wobbleRateVal = $("wobble-rate-val");
+const ageVal = $("age-val");
+
 // ---------------- State ----------------
-const MAX_DURATION = 5;       // seconds
+const MAX_DURATION_CRUSH = 5;    // sec
+const MAX_DURATION_GRANNY = 15;  // sec (room for a full VO line)
+
 const PRESETS = {
   clean:     { bits: 16, rate: 44100 },
   snes:      { bits: 8,  rate: 16000 },
@@ -27,18 +49,49 @@ const PRESETS = {
   destroyed: { bits: 4,  rate: 8000  },
 };
 
+let mode = "crush";                // "crush" | "granny"
 let audioCtx = null;
 let workletReady = false;
-let recordingState = null;    // { stream, source, node, chunks, ctx, raf }
-let sourceBuffer = null;      // captured AudioBuffer (raw)
-let crushedUrl = null;        // current object URL on the audio/download
-let renderToken = 0;          // cancel stale renders
-let sourceLabel = "recording"; // "recording" | basename of uploaded file — drives download name
+let recordingState = null;
+let sourceBuffer = null;
+let processedUrl = null;
+let renderToken = 0;
+let sourceLabel = "recording";
 
 // ---------------- Init ----------------
-applyPreset(presetSel.value);
-syncFill(bitsEl);
-syncFill(rateEl);
+applyCrushPreset(presetSel.value);
+applyGrannyPreset(grannyPresetSel.value);
+[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl].forEach(syncFill);
+updateModeUI();
+
+// ---------------- Mode switching ----------------
+[tabCrush, tabGranny].forEach((tab) => {
+  tab.addEventListener("click", () => {
+    if (recordingState) return; // don't switch mid-record
+    const next = tab.dataset.mode;
+    if (next === mode) return;
+    mode = next;
+    updateModeUI();
+    if (sourceBuffer) scheduleRender();
+  });
+});
+
+function updateModeUI() {
+  tabCrush.classList.toggle("is-active", mode === "crush");
+  tabGranny.classList.toggle("is-active", mode === "granny");
+  panelCrush.hidden = mode !== "crush";
+  panelGranny.hidden = mode !== "granny";
+  if (!sourceBuffer && !recordingState) {
+    hint.textContent = mode === "crush"
+      ? `PRESS START TO RECORD ${MAX_DURATION_CRUSH} SEC`
+      : `PRESS START TO RECORD UP TO ${MAX_DURATION_GRANNY} SEC`;
+    timer.textContent = currentMaxDuration().toFixed(1);
+  }
+}
+
+function currentMaxDuration() {
+  return mode === "granny" ? MAX_DURATION_GRANNY : MAX_DURATION_CRUSH;
+}
 
 // ---------------- Recording ----------------
 recordBtn.addEventListener("click", async () => {
@@ -65,7 +118,6 @@ async function startRecording() {
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
 
-  // Lazily create the AudioContext on the user gesture (required by Safari).
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") await audioCtx.resume();
 
@@ -82,23 +134,21 @@ async function startRecording() {
     captureNode = new AudioWorkletNode(audioCtx, "capture-processor");
     captureNode.port.onmessage = (e) => chunks.push(e.data);
     source.connect(captureNode);
-    // Worklet must be connected to a destination to pull, but we don't want to
-    // monitor (and induce feedback). Route into a muted gain → destination.
     const sink = audioCtx.createGain();
     sink.gain.value = 0;
     captureNode.connect(sink).connect(audioCtx.destination);
   } else {
-    // Fallback: ScriptProcessorNode (deprecated but universally available).
     captureNode = audioCtx.createScriptProcessor(4096, 1, 1);
     captureNode.onaudioprocess = (e) => {
       chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
     };
     source.connect(captureNode);
-    captureNode.connect(audioCtx.destination); // SP requires a destination to fire
+    captureNode.connect(audioCtx.destination);
   }
 
   const startedAt = performance.now();
-  recordingState = { stream, source, node: captureNode, chunks, ctx: audioCtx, startedAt, raf: 0 };
+  const cap = currentMaxDuration();
+  recordingState = { stream, source, node: captureNode, chunks, ctx: audioCtx, startedAt, cap, raf: 0 };
 
   document.body.classList.add("recording");
   recordBtn.querySelector(".btn-rec-inner").textContent = "STOP";
@@ -108,12 +158,8 @@ async function startRecording() {
   const tick = () => {
     if (!recordingState) return;
     const elapsed = (performance.now() - recordingState.startedAt) / 1000;
-    const remaining = Math.max(0, MAX_DURATION - elapsed);
-    timer.textContent = remaining.toFixed(1);
-    if (elapsed >= MAX_DURATION) {
-      stopRecording();
-      return;
-    }
+    timer.textContent = Math.max(0, recordingState.cap - elapsed).toFixed(1);
+    if (elapsed >= recordingState.cap) { stopRecording(); return; }
     recordingState.raf = requestAnimationFrame(tick);
   };
   recordingState.raf = requestAnimationFrame(tick);
@@ -125,7 +171,6 @@ async function registerWorklet(ctx) {
       process(inputs) {
         const input = inputs[0];
         if (input && input[0] && input[0].length) {
-          // Slice copies into a transferable buffer that survives postMessage.
           this.port.postMessage(input[0].slice());
         }
         return true;
@@ -134,11 +179,7 @@ async function registerWorklet(ctx) {
     registerProcessor("capture-processor", CaptureProcessor);
   `;
   const url = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
-  try {
-    await ctx.audioWorklet.addModule(url);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
 }
 
 function stopRecording() {
@@ -155,7 +196,7 @@ function stopRecording() {
 
   document.body.classList.remove("recording");
   recordBtn.querySelector(".btn-rec-inner").textContent = "REC";
-  timer.textContent = MAX_DURATION.toFixed(1);
+  timer.textContent = currentMaxDuration().toFixed(1);
 
   if (!chunks.length) {
     setStatus("EMPTY");
@@ -163,7 +204,6 @@ function stopRecording() {
     return;
   }
 
-  // Concatenate chunks into the source AudioBuffer.
   const total = chunks.reduce((n, c) => n + c.length, 0);
   const merged = new Float32Array(total);
   let off = 0;
@@ -173,43 +213,35 @@ function stopRecording() {
   sourceBuffer = buf;
   sourceLabel = "recording";
 
-  setStatus("CRUNCH");
+  setStatus(mode === "granny" ? "AGE" : "CRUNCH");
   hint.textContent = "TAP REC TO TRY AGAIN";
   resetBtn.disabled = false;
   scheduleRender();
 }
 
-// ---------------- Upload sound FX ----------------
+// ---------------- Upload ----------------
 loadFxBtn.addEventListener("click", () => {
-  if (recordingState) return; // ignore while actively recording
-  fileInput.value = ""; // allow re-selecting the same file
+  if (recordingState) return;
+  fileInput.value = "";
   fileInput.click();
 });
 
 fileInput.addEventListener("change", async () => {
   const file = fileInput.files && fileInput.files[0];
   if (!file) return;
-  try {
-    await loadFxFile(file);
-  } catch (err) {
-    handleUploadError(err);
-  }
+  try { await loadFxFile(file); } catch (err) { handleUploadError(err); }
 });
 
 async function loadFxFile(file) {
   setStatus("DECODE");
   hint.textContent = `DECODING ${truncate(file.name, 18).toUpperCase()}…`;
-
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === "suspended") await audioCtx.resume();
-
   const arrayBuf = await file.arrayBuffer();
-  // Safari needs the callback form for some legacy versions; promise form works in all modern browsers.
   const decoded = await audioCtx.decodeAudioData(arrayBuf.slice(0));
   sourceBuffer = decoded;
   sourceLabel = sanitizeBasename(file.name) || "fx";
-
-  setStatus("CRUNCH");
+  setStatus(mode === "granny" ? "AGE" : "CRUNCH");
   hint.textContent = `LOADED ${truncate(file.name, 18).toUpperCase()} — TWEAK & DOWNLOAD`;
   resetBtn.disabled = false;
   timer.textContent = decoded.duration.toFixed(1);
@@ -219,20 +251,9 @@ async function loadFxFile(file) {
 function handleUploadError(err) {
   console.error("[bitcrusher] upload error:", err);
   setStatus("ERR");
-  if (err && (err.name === "EncodingError" || err.name === "NotSupportedError")) {
-    hint.textContent = "UNSUPPORTED FORMAT — TRY WAV/MP3/M4A/OGG";
-  } else {
-    hint.textContent = "COULD NOT DECODE — SEE CONSOLE";
-  }
-}
-
-function sanitizeBasename(name) {
-  const noExt = name.replace(/\.[^.]+$/, "");
-  return noExt.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 40);
-}
-
-function truncate(s, n) {
-  return s.length <= n ? s : s.slice(0, n - 1) + "…";
+  hint.textContent = (err && (err.name === "EncodingError" || err.name === "NotSupportedError"))
+    ? "UNSUPPORTED FORMAT — TRY WAV/MP3/M4A/OGG"
+    : "COULD NOT DECODE — SEE CONSOLE";
 }
 
 function handleRecordError(err) {
@@ -260,19 +281,32 @@ function scheduleRender() {
 async function render() {
   if (!sourceBuffer) return;
   const token = ++renderToken;
-  const bits = +bitsEl.value;
-  const rate = +rateEl.value;
   setStatus("RENDER");
   try {
-    const crushed = await crush(sourceBuffer, { bits, targetSampleRate: rate });
-    if (token !== renderToken) return; // a newer render superseded us
-    const blob = encodeWAV(crushed);
-    if (crushedUrl) URL.revokeObjectURL(crushedUrl);
-    crushedUrl = URL.createObjectURL(blob);
-    audio.src = crushedUrl;
-    downloadEl.href = crushedUrl;
-    const prefix = sourceLabel === "recording" ? "bitcrush" : `bitcrush-${sourceLabel}`;
-    downloadEl.setAttribute("download", `${prefix}-${bits}b-${rate}hz-${timestamp()}.wav`);
+    let outBuf, filename;
+    if (mode === "crush") {
+      const bits = +bitsEl.value;
+      const rate = +rateEl.value;
+      outBuf = await crush(sourceBuffer, { bits, targetSampleRate: rate });
+      const prefix = sourceLabel === "recording" ? "bitcrush" : `bitcrush-${sourceLabel}`;
+      filename = `${prefix}-${bits}b-${rate}hz-${timestamp()}.wav`;
+    } else {
+      const semitones    = +pitchEl.value;
+      const wobbleDepth  = +wobbleEl.value / 100;
+      const wobbleRateHz = +wobbleRateEl.value / 10;     // slider 20..90 → 2.0..9.0 Hz
+      const age          = +ageEl.value / 100;
+      outBuf = await makeGranny(sourceBuffer, { semitones, wobbleDepth, wobbleRateHz, age });
+      const prefix = sourceLabel === "recording" ? "granny" : `granny-${sourceLabel}`;
+      const tag = grannyPresetSel.value === "custom" ? "custom" : grannyPresetSel.value;
+      filename = `${prefix}-${tag}-${timestamp()}.wav`;
+    }
+    if (token !== renderToken) return;
+    const blob = encodeWAV(outBuf);
+    if (processedUrl) URL.revokeObjectURL(processedUrl);
+    processedUrl = URL.createObjectURL(blob);
+    audio.src = processedUrl;
+    downloadEl.href = processedUrl;
+    downloadEl.setAttribute("download", filename);
     downloadEl.classList.remove("disabled");
     downloadEl.setAttribute("aria-disabled", "false");
     setStatus("READY");
@@ -283,10 +317,10 @@ async function render() {
   }
 }
 
-// ---------------- Presets + sliders ----------------
+// ---------------- Bitcrusher controls ----------------
 presetSel.addEventListener("change", () => {
   if (presetSel.value === "custom") return;
-  applyPreset(presetSel.value);
+  applyCrushPreset(presetSel.value);
   scheduleRender();
 });
 
@@ -295,52 +329,111 @@ presetSel.addEventListener("change", () => {
     syncFill(el);
     if (el === bitsEl) bitsVal.textContent = String(+el.value).padStart(2, "0");
     else rateVal.textContent = String(+el.value);
-    presetSel.value = matchPreset(+bitsEl.value, +rateEl.value) || "custom";
+    presetSel.value = matchCrushPreset(+bitsEl.value, +rateEl.value) || "custom";
     scheduleRender();
   });
 });
 
-function applyPreset(key) {
+function applyCrushPreset(key) {
   const p = PRESETS[key];
   if (!p) return;
   bitsEl.value = String(p.bits);
   rateEl.value = String(p.rate);
   bitsVal.textContent = String(p.bits).padStart(2, "0");
   rateVal.textContent = String(p.rate);
-  syncFill(bitsEl);
-  syncFill(rateEl);
+  syncFill(bitsEl); syncFill(rateEl);
 }
 
-function matchPreset(bits, rate) {
+function matchCrushPreset(bits, rate) {
   for (const [k, p] of Object.entries(PRESETS)) {
     if (p.bits === bits && p.rate === rate) return k;
   }
   return null;
 }
 
+// ---------------- Granny controls ----------------
+grannyPresetSel.addEventListener("change", () => {
+  if (grannyPresetSel.value === "custom") return;
+  applyGrannyPreset(grannyPresetSel.value);
+  scheduleRender();
+});
+
+[pitchEl, wobbleEl, wobbleRateEl, ageEl].forEach((el) => {
+  el.addEventListener("input", () => {
+    syncFill(el);
+    updateGrannyReadouts();
+    grannyPresetSel.value = matchGrannyPreset() || "custom";
+    scheduleRender();
+  });
+});
+
+function applyGrannyPreset(key) {
+  const p = GRANNY_PRESETS[key];
+  if (!p) return;
+  pitchEl.value = String(p.semitones);
+  wobbleEl.value = String(Math.round(p.wobbleDepth * 100));
+  wobbleRateEl.value = String(Math.round(p.wobbleRateHz * 10));
+  ageEl.value = String(Math.round(p.age * 100));
+  [pitchEl, wobbleEl, wobbleRateEl, ageEl].forEach(syncFill);
+  updateGrannyReadouts();
+}
+
+function updateGrannyReadouts() {
+  pitchVal.textContent = "+" + pitchEl.value;
+  wobbleVal.textContent = wobbleEl.value + "%";
+  wobbleRateVal.textContent = (+wobbleRateEl.value / 10).toFixed(1) + "HZ";
+  ageVal.textContent = ageEl.value + "%";
+}
+
+function matchGrannyPreset() {
+  const semitones    = +pitchEl.value;
+  const wobbleDepth  = +wobbleEl.value / 100;
+  const wobbleRateHz = +wobbleRateEl.value / 10;
+  const age          = +ageEl.value / 100;
+  for (const [k, p] of Object.entries(GRANNY_PRESETS)) {
+    if (p.semitones === semitones &&
+        approx(p.wobbleDepth, wobbleDepth, 0.005) &&
+        approx(p.wobbleRateHz, wobbleRateHz, 0.05) &&
+        approx(p.age, age, 0.005)) {
+      return k;
+    }
+  }
+  return null;
+}
+
+function approx(a, b, eps) { return Math.abs(a - b) <= eps; }
+
+// ---------------- Shared ----------------
 function syncFill(input) {
   const min = +input.min, max = +input.max, val = +input.value;
   const pct = ((val - min) / (max - min)) * 100;
   input.style.setProperty("--fill", pct + "%");
 }
 
-// ---------------- Reset ----------------
 resetBtn.addEventListener("click", () => {
   sourceBuffer = null;
   sourceLabel = "recording";
-  if (crushedUrl) { URL.revokeObjectURL(crushedUrl); crushedUrl = null; }
+  if (processedUrl) { URL.revokeObjectURL(processedUrl); processedUrl = null; }
   audio.removeAttribute("src"); audio.load();
   downloadEl.removeAttribute("href");
   downloadEl.classList.add("disabled");
   downloadEl.setAttribute("aria-disabled", "true");
   resetBtn.disabled = true;
   setStatus("READY");
-  hint.textContent = "PRESS START TO RECORD 5 SEC";
-  timer.textContent = MAX_DURATION.toFixed(1);
+  hint.textContent = mode === "crush"
+    ? `PRESS START TO RECORD ${MAX_DURATION_CRUSH} SEC`
+    : `PRESS START TO RECORD UP TO ${MAX_DURATION_GRANNY} SEC`;
+  timer.textContent = currentMaxDuration().toFixed(1);
 });
 
-// ---------------- Helpers ----------------
 function setStatus(s) { status.textContent = s; }
+
+function sanitizeBasename(name) {
+  const noExt = name.replace(/\.[^.]+$/, "");
+  return noExt.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 40);
+}
+
+function truncate(s, n) { return s.length <= n ? s : s.slice(0, n - 1) + "…"; }
 
 function timestamp() {
   const d = new Date();

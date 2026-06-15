@@ -109,6 +109,46 @@ body {
   text-shadow: 0 2px 0 #003a47;
 }
 
+/* ---------- Mode tabs ---------- */
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tab {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: "Press Start 2P", monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 14px 8px;
+  color: var(--ink-dim);
+  background: #0a0428;
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 2px #2a1f6e,
+    0 4px 0 #000;
+  border-radius: 2px;
+  transition: transform 0.06s linear, color 0.1s linear;
+}
+.tab:hover { color: var(--ink); }
+.tab.is-active {
+  color: var(--yellow);
+  background: linear-gradient(180deg, #2a1f6e, #1a1146);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 2px var(--yellow),
+    inset 0 -4px 0 rgba(255, 216, 58, 0.15),
+    0 4px 0 #000;
+  text-shadow: 0 2px 0 #553f00;
+}
+.tab.is-active::after {
+  content: " ▼";
+  color: var(--yellow);
+}
+.tab:focus-visible { outline: 2px dashed var(--cyan); outline-offset: 4px; }
+
 /* ---------- Pixel border helper (fake 4-side outline) ---------- */
 .pixel-frame,
 .screen,
@@ -302,6 +342,8 @@ body {
   display: grid;
   gap: 14px;
 }
+/* `display: grid` above outranks the UA `[hidden] { display: none }`. */
+.panel[hidden] { display: none; }
 .panel-row {
   display: grid;
   grid-template-columns: 70px 1fr auto;

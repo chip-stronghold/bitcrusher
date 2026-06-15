@@ -20,6 +20,11 @@
       <p class="sub">★ 16-BIT AUDIO CRUNCHER ★</p>
     </header>
 
+    <nav class="mode-tabs" aria-label="mode">
+      <button type="button" id="tab-crush" class="tab is-active" data-mode="crush">BITCRUSHER</button>
+      <button type="button" id="tab-granny" class="tab" data-mode="granny">GRANNY VO</button>
+    </nav>
+
     <section class="screen" aria-label="recorder">
       <div class="hud">
         <span class="hud-label">STATUS</span>
@@ -47,7 +52,7 @@
       </div>
     </section>
 
-    <section class="panel" aria-label="effect controls">
+    <section class="panel mode-panel" id="panel-crush" aria-label="bitcrusher controls">
       <div class="panel-row">
         <label class="lbl" for="preset">PRESET</label>
         <div class="select-wrap">
@@ -71,6 +76,44 @@
         <label class="lbl" for="rate">RATE</label>
         <input id="rate" class="slider" type="range" min="2000" max="44100" step="100" value="16000">
         <output id="rate-val" class="readout">16000</output>
+      </div>
+    </section>
+
+    <section class="panel mode-panel" id="panel-granny" aria-label="granny voice controls" hidden>
+      <div class="panel-row">
+        <label class="lbl" for="granny-preset">PRESET</label>
+        <div class="select-wrap">
+          <select id="granny-preset" class="select">
+            <option value="sweet">SWEET — GENTLE GRANDMA</option>
+            <option value="cranky" selected>CRANKY — GRUMPY OLD LADY</option>
+            <option value="witch">WITCH — FULL CACKLE</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="pitch">PITCH</label>
+        <input id="pitch" class="slider" type="range" min="0" max="12" step="1" value="5">
+        <output id="pitch-val" class="readout">+5</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="wobble">WOBBLE</label>
+        <input id="wobble" class="slider" type="range" min="0" max="100" step="1" value="32">
+        <output id="wobble-val" class="readout">32%</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="wobble-rate">RATE</label>
+        <input id="wobble-rate" class="slider" type="range" min="20" max="90" step="1" value="55">
+        <output id="wobble-rate-val" class="readout">5.5HZ</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="age">AGE</label>
+        <input id="age" class="slider" type="range" min="0" max="100" step="1" value="65">
+        <output id="age-val" class="readout">65%</output>
       </div>
     </section>
 
