@@ -55,11 +55,11 @@ const ageVal = $("age-val");
 // Hamster controls
 const hamsterPresetSel = $("hamster-preset");
 const hPitchEl = $("h-pitch");
+const hSpeedEl = $("h-speed");
 const hSqueakEl = $("h-squeak");
-const hChatterEl = $("h-chatter");
 const hPitchVal = $("h-pitch-val");
+const hSpeedVal = $("h-speed-val");
 const hSqueakVal = $("h-squeak-val");
-const hChatterVal = $("h-chatter-val");
 
 // ---------------- State ----------------
 const MAX_DURATION_CRUSH = 5;    // sec
@@ -86,7 +86,7 @@ let sourceLabel = "recording";
 applyCrushPreset(presetSel.value);
 applyGrannyPreset(grannyPresetSel.value);
 applyHamsterPreset(hamsterPresetSel.value);
-[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl, hPitchEl, hSqueakEl, hChatterEl].forEach(syncFill);
+[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl, hPitchEl, hSpeedEl, hSqueakEl].forEach(syncFill);
 updateModeUI();
 
 // ---------------- Mode switching ----------------
@@ -123,9 +123,9 @@ function currentMaxDuration() {
 
 function restingHint() {
   const cap = currentMaxDuration();
-  return mode === "crush"
-    ? `PRESS START TO RECORD ${cap} SEC`
-    : `PRESS START TO RECORD UP TO ${cap} SEC`;
+  if (mode === "crush") return `PRESS START TO RECORD ${cap} SEC`;
+  if (mode === "hamster") return `SPEAK SLOW & CLEAR — UP TO ${cap} SEC`;
+  return `PRESS START TO RECORD UP TO ${cap} SEC`;
 }
 
 // ---------------- Recording ----------------
@@ -336,9 +336,9 @@ async function render() {
       filename = `${prefix}-${tag}-${timestamp()}.wav`;
     } else {
       const semitones = +hPitchEl.value;
+      const speed     = +hSpeedEl.value / 100;
       const squeak    = +hSqueakEl.value / 100;
-      const chatter   = +hChatterEl.value / 100;
-      outBuf = await makeHamster(sourceBuffer, { semitones, squeak, chatter });
+      outBuf = await makeHamster(sourceBuffer, { semitones, speed, squeak });
       const prefix = sourceLabel === "recording" ? "hamster" : `hamster-${sourceLabel}`;
       const tag = hamsterPresetSel.value === "custom" ? "custom" : hamsterPresetSel.value;
       filename = `${prefix}-${tag}-${timestamp()}.wav`;
@@ -453,7 +453,7 @@ hamsterPresetSel.addEventListener("change", () => {
   scheduleRender();
 });
 
-[hPitchEl, hSqueakEl, hChatterEl].forEach((el) => {
+[hPitchEl, hSpeedEl, hSqueakEl].forEach((el) => {
   el.addEventListener("input", () => {
     syncFill(el);
     updateHamsterReadouts();
@@ -466,26 +466,26 @@ function applyHamsterPreset(key) {
   const p = HAMSTER_PRESETS[key];
   if (!p) return;
   hPitchEl.value = String(p.semitones);
+  hSpeedEl.value = String(Math.round(p.speed * 100));
   hSqueakEl.value = String(Math.round(p.squeak * 100));
-  hChatterEl.value = String(Math.round(p.chatter * 100));
-  [hPitchEl, hSqueakEl, hChatterEl].forEach(syncFill);
+  [hPitchEl, hSpeedEl, hSqueakEl].forEach(syncFill);
   updateHamsterReadouts();
 }
 
 function updateHamsterReadouts() {
   hPitchVal.textContent = "+" + hPitchEl.value;
+  hSpeedVal.textContent = hSpeedEl.value + "%";
   hSqueakVal.textContent = hSqueakEl.value + "%";
-  hChatterVal.textContent = hChatterEl.value + "%";
 }
 
 function matchHamsterPreset() {
   const semitones = +hPitchEl.value;
+  const speed     = +hSpeedEl.value / 100;
   const squeak    = +hSqueakEl.value / 100;
-  const chatter   = +hChatterEl.value / 100;
   for (const [k, p] of Object.entries(HAMSTER_PRESETS)) {
     if (p.semitones === semitones &&
-        approx(p.squeak, squeak, 0.005) &&
-        approx(p.chatter, chatter, 0.005)) return k;
+        approx(p.speed, speed, 0.005) &&
+        approx(p.squeak, squeak, 0.005)) return k;
   }
   return null;
 }

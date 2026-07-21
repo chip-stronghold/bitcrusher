@@ -1,28 +1,37 @@
-// "Hamster" cartoon voice processor.
+// "Hamster" cartoon voice processor — the Alvin-and-the-Chipmunks way.
 //
-// Same PSOLA-lite pitch shifter as granny, but with smaller grains (~25 ms)
-// so the artifacts feel chattery instead of smooth. After the shift:
+// The classic cartoon rodent voice is a tape-speed trick: play the take
+// back faster, so pitch, formants, and talking speed all rise together.
+// A duration-preserving pitch shifter can't do this — it keeps formants
+// planted and smears grains, which reads as "robot on helium".
 //
-//   src → HP (thin) → peaking @ 2 kHz (nasal) → peaking @ 4.5 kHz (squeak)
-//       → LP (cartoon warmth) → tremolo (fast LFO on gain, the "chatter")
-//       → soft-clip → compressor → out
+// Pipeline:
+//   mono → WSOLA time-stretch (recovers duration per `speed`) →
+//   varispeed resample (the chipmunk) → HP → gentle nasal/squeak EQ →
+//   LP → mild soft-clip → compressor → out
 //
-// Tremolo (amplitude modulation) is what gives the cartoon warble; vibrato
-// (frequency modulation) is baked into the shift path if you want it, but
-// hamsters read better with pure tremolo.
+// `speed` = how much of the natural speed-up to keep.
+//   1.0 → pure varispeed: cleanest, fully sped-up (short + fast = peak hamster)
+//   0.0 → stretched back to original duration (most artifacts, use sparingly)
+// The stretch happens BEFORE the resample, on unshifted audio, where the
+// splices are least audible. At speed=1 the stretch is skipped entirely.
 
 export async function makeHamster(sourceBuffer, opts) {
-  const semitones = clamp(opts.semitones ?? 12,  6, 16);
-  const squeak    = clamp(opts.squeak    ?? 0.6, 0, 1);
-  const chatter   = clamp(opts.chatter   ?? 0.4, 0, 1);
+  const semitones = clamp(opts.semitones ?? 12,  4, 16);
+  const speed     = clamp(opts.speed     ?? 0.7, 0, 1);
+  const squeak    = clamp(opts.squeak    ?? 0.5, 0, 1);
 
   const sr = sourceBuffer.sampleRate;
-  const length = sourceBuffer.length;
-
   const mono = mixToMono(sourceBuffer);
   const factor = Math.pow(2, semitones / 12);
-  const shifted = pitchShiftFast(mono, sr, factor);
 
+  // Stretch by alpha, then resample by factor. Net duration = alpha/factor.
+  // speed=1 → alpha=1 (full speed-up); speed=0 → alpha=factor (original length).
+  const alpha = 1 + (factor - 1) * (1 - speed);
+  const stretched = alpha > 1.01 ? timeStretchWSOLA(mono, sr, alpha) : mono;
+  const shifted = varispeed(stretched, factor);
+
+  const length = shifted.length;
   const offline = new OfflineAudioContext(1, length, sr);
   const buf = offline.createBuffer(1, length, sr);
   buf.getChannelData(0).set(shifted);
@@ -30,86 +39,106 @@ export async function makeHamster(sourceBuffer, opts) {
   const src = offline.createBufferSource();
   src.buffer = buf;
 
-  // Thin — no chest cavity on a hamster.
+  // Thin the low end — small creature, no chest.
   const hp = offline.createBiquadFilter();
   hp.type = "highpass";
-  hp.frequency.value = 320 + squeak * 180;    // 320..500
+  hp.frequency.value = 260 + squeak * 120;    // 260..380
   hp.Q.value = 0.7;
 
-  // Nasal bump.
+  // Gentle nasal bump. Big peaks here are what read as "robot".
   const nasal = offline.createBiquadFilter();
   nasal.type = "peaking";
   nasal.frequency.value = 1900;
-  nasal.Q.value = 1.2;
-  nasal.gain.value = 3 + squeak * 7;          // 3..10 dB
+  nasal.Q.value = 1.0;
+  nasal.gain.value = 1.5 + squeak * 3.5;      // 1.5..5 dB
 
-  // Squeaky presence.
+  // A little squeaky sparkle.
   const bright = offline.createBiquadFilter();
   bright.type = "peaking";
   bright.frequency.value = 4600;
-  bright.Q.value = 1.4;
-  bright.gain.value = 2 + squeak * 8;         // 2..10 dB
+  bright.Q.value = 1.1;
+  bright.gain.value = 1 + squeak * 4;         // 1..5 dB
 
-  // Cartoon-warm rolloff — keeps it out of the sibilant zone.
   const lp = offline.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.value = 8500;
+  lp.frequency.value = 9000;
 
-  // Fast tremolo — the chatter.
-  const trem = offline.createGain();
-  const baseline = 1 - chatter * 0.25;
-  trem.gain.value = baseline;
-  const lfo = offline.createOscillator();
-  lfo.frequency.value = 6 + chatter * 5;      // 6..11 Hz
-  const lfoAmp = offline.createGain();
-  lfoAmp.gain.value = chatter * 0.35;
-  lfo.connect(lfoAmp).connect(trem.gain);
-  lfo.start();
-
+  // Barely-there saturation for warmth — not fuzz.
   const shaper = offline.createWaveShaper();
-  shaper.curve = makeSoftClipCurve(0.35 + squeak * 0.35);
+  shaper.curve = makeSoftClipCurve(0.15 + squeak * 0.25);
   shaper.oversample = "2x";
 
-  // Snappy comp — cartoon voices are always ducked hard.
   const comp = offline.createDynamicsCompressor();
-  comp.threshold.value = -19;
-  comp.knee.value = 8;
-  comp.ratio.value = 5;
+  comp.threshold.value = -18;
+  comp.knee.value = 10;
+  comp.ratio.value = 4;
   comp.attack.value = 0.003;
-  comp.release.value = 0.08;
+  comp.release.value = 0.1;
 
   const out = offline.createGain();
-  out.gain.value = 0.85;
+  out.gain.value = 0.9;
 
-  src.connect(hp).connect(nasal).connect(bright).connect(lp).connect(trem).connect(shaper).connect(comp).connect(out).connect(offline.destination);
+  src.connect(hp).connect(nasal).connect(bright).connect(lp).connect(shaper).connect(comp).connect(out).connect(offline.destination);
   src.start();
   return await offline.startRendering();
 }
 
-// ---------- Granular pitch shift (fixed 25 ms grain) ----------
-function pitchShiftFast(input, sampleRate, factor) {
-  const n = input.length;
-  const out = new Float32Array(n);
-  const grain = Math.max(64, Math.floor(0.025 * sampleRate));
-  const hop = Math.floor(grain / 2);
-  const window = new Float32Array(grain);
-  for (let i = 0; i < grain; i++) {
-    window[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (grain - 1)));
+// ---------- Varispeed (tape speed-up) ----------
+// Linear-interp resample. factor > 1 → higher pitch, shorter duration.
+function varispeed(input, factor) {
+  const outLen = Math.max(1, Math.floor((input.length - 1) / factor));
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * factor;
+    const idx = pos | 0;
+    const frac = pos - idx;
+    out[i] = input[idx] * (1 - frac) + input[idx + 1] * frac;
   }
-  let outPos = 0;
-  let inPos = 0;
-  while (outPos + grain < n) {
-    let read = inPos;
-    for (let i = 0; i < grain; i++) {
-      const idx = Math.floor(read);
-      if (idx + 1 >= n) break;
-      const frac = read - idx;
-      const s = input[idx] * (1 - frac) + input[idx + 1] * frac;
-      out[outPos + i] += s * window[i];
-      read += factor;
+  return out;
+}
+
+// ---------- WSOLA time-stretch ----------
+// Lengthens input by alpha (>1). Splice points are chosen by cross-
+// correlation against the natural continuation of the previous grain,
+// so grain boundaries land where waveforms align — far less metallic
+// than fixed-hop overlap-add.
+function timeStretchWSOLA(input, sampleRate, alpha) {
+  const n = input.length;
+  const outLen = Math.floor(n * alpha);
+  const out = new Float32Array(outLen);
+  const grain = Math.min(Math.floor(0.06 * sampleRate), 4096); // ~60 ms
+  const overlap = grain >> 1;
+  const hop = grain - overlap;
+  const seek = Math.floor(0.012 * sampleRate);                 // ±12 ms
+
+  const firstLen = Math.min(grain, n);
+  for (let i = 0; i < firstLen; i++) out[i] = input[i];
+
+  let outPos = hop;
+  let prevIn = 0;
+  while (outPos + grain < outLen) {
+    const nominal = Math.round(outPos / alpha);
+    const target = Math.min(prevIn + hop, n - overlap - 1);
+    const lo = Math.max(0, Math.min(nominal - seek, n - grain - 1));
+    const hi = Math.max(lo, Math.min(nominal + seek, n - grain - 1));
+
+    let best = lo, bestCorr = -Infinity;
+    for (let cand = lo; cand <= hi; cand += 4) {
+      let corr = 0;
+      for (let i = 0; i < overlap; i += 4) {
+        corr += input[target + i] * input[cand + i];
+      }
+      if (corr > bestCorr) { bestCorr = corr; best = cand; }
     }
+
+    for (let i = 0; i < overlap; i++) {
+      const t = i / overlap;
+      out[outPos + i] = out[outPos + i] * (1 - t) + input[best + i] * t;
+    }
+    for (let i = overlap; i < grain; i++) out[outPos + i] = input[best + i];
+
+    prevIn = best;
     outPos += hop;
-    inPos += hop;
   }
   return out;
 }
@@ -142,7 +171,7 @@ function mixToMono(buffer) {
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 
 export const HAMSTER_PRESETS = {
-  squeak:  { semitones: 9,  squeak: 0.40, chatter: 0.20 },
-  chatter: { semitones: 12, squeak: 0.65, chatter: 0.45 },
-  helium:  { semitones: 15, squeak: 0.85, chatter: 0.70 },
+  squeak:  { semitones: 8,  speed: 0.45, squeak: 0.35 },
+  classic: { semitones: 12, speed: 0.70, squeak: 0.55 },
+  zoomies: { semitones: 15, speed: 1.00, squeak: 0.75 },
 };
