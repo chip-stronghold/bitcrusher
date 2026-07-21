@@ -23,6 +23,7 @@
     <nav class="mode-tabs" aria-label="mode">
       <button type="button" id="tab-crush" class="tab is-active" data-mode="crush">BITCRUSHER</button>
       <button type="button" id="tab-granny" class="tab" data-mode="granny">GRANNY VO</button>
+      <button type="button" id="tab-hamster" class="tab" data-mode="hamster">HAMSTER</button>
     </nav>
 
     <section class="screen" aria-label="recorder">
@@ -114,6 +115,38 @@
         <label class="lbl" for="age">AGE</label>
         <input id="age" class="slider" type="range" min="0" max="100" step="1" value="65">
         <output id="age-val" class="readout">65%</output>
+      </div>
+    </section>
+
+    <section class="panel mode-panel" id="panel-hamster" aria-label="hamster voice controls" hidden>
+      <div class="panel-row">
+        <label class="lbl" for="hamster-preset">PRESET</label>
+        <div class="select-wrap">
+          <select id="hamster-preset" class="select">
+            <option value="squeak">SQUEAK — MILD RODENT</option>
+            <option value="chatter" selected>CHATTER — CLASSIC HAMSTER</option>
+            <option value="helium">HELIUM — FULL CARTOON</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="h-pitch">PITCH</label>
+        <input id="h-pitch" class="slider" type="range" min="6" max="16" step="1" value="12">
+        <output id="h-pitch-val" class="readout">+12</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="h-squeak">SQUEAK</label>
+        <input id="h-squeak" class="slider" type="range" min="0" max="100" step="1" value="65">
+        <output id="h-squeak-val" class="readout">65%</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="h-chatter">CHATTER</label>
+        <input id="h-chatter" class="slider" type="range" min="0" max="100" step="1" value="45">
+        <output id="h-chatter-val" class="readout">45%</output>
       </div>
     </section>
 

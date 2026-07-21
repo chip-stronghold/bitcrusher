@@ -1,5 +1,6 @@
 import { crush } from "./crusher.js";
 import { makeGranny, GRANNY_PRESETS } from "./granny.js";
+import { makeHamster, HAMSTER_PRESETS } from "./hamster.js";
 import { encodeWAV } from "./wav-encoder.js";
 
 // ---------------- DOM ----------------
@@ -17,15 +18,21 @@ const fileInput = $("file-input");
 // Mode tabs + panels
 const tabCrush = $("tab-crush");
 const tabGranny = $("tab-granny");
+const tabHamster = $("tab-hamster");
 const panelCrush = $("panel-crush");
 const panelGranny = $("panel-granny");
+const panelHamster = $("panel-hamster");
 const marqueeTitle = $("marquee-title");
 const marqueeSub = $("marquee-sub");
 
 const MARQUEE = {
-  crush:  { title: "BITCRUSHER", sub: "★ 16-BIT AUDIO CRUNCHER ★", page: "BITCRUSHER ][" },
-  granny: { title: "GRANNY VO",  sub: "★ OLD-LADY VOICE PROCESSOR ★", page: "GRANNY VO ][" },
+  crush:   { title: "BITCRUSHER", sub: "★ 16-BIT AUDIO CRUNCHER ★",   page: "BITCRUSHER ][" },
+  granny:  { title: "GRANNY VO",  sub: "★ OLD-LADY VOICE PROCESSOR ★", page: "GRANNY VO ][" },
+  hamster: { title: "HAMSTER",    sub: "★ CARTOON RODENT VOICE ★",     page: "HAMSTER ][" },
 };
+
+const TABS = { crush: tabCrush, granny: tabGranny, hamster: tabHamster };
+const PANELS = { crush: panelCrush, granny: panelGranny, hamster: panelHamster };
 
 // Bitcrusher controls
 const presetSel = $("preset");
@@ -45,9 +52,19 @@ const wobbleVal = $("wobble-val");
 const wobbleRateVal = $("wobble-rate-val");
 const ageVal = $("age-val");
 
+// Hamster controls
+const hamsterPresetSel = $("hamster-preset");
+const hPitchEl = $("h-pitch");
+const hSqueakEl = $("h-squeak");
+const hChatterEl = $("h-chatter");
+const hPitchVal = $("h-pitch-val");
+const hSqueakVal = $("h-squeak-val");
+const hChatterVal = $("h-chatter-val");
+
 // ---------------- State ----------------
 const MAX_DURATION_CRUSH = 5;    // sec
 const MAX_DURATION_GRANNY = 15;  // sec (room for a full VO line)
+const MAX_DURATION_HAMSTER = 10; // sec (short cartoon lines)
 
 const PRESETS = {
   clean:     { bits: 16, rate: 44100 },
@@ -56,7 +73,7 @@ const PRESETS = {
   destroyed: { bits: 4,  rate: 8000  },
 };
 
-let mode = "crush";                // "crush" | "granny"
+let mode = "crush";                // "crush" | "granny" | "hamster"
 let audioCtx = null;
 let workletReady = false;
 let recordingState = null;
@@ -68,11 +85,12 @@ let sourceLabel = "recording";
 // ---------------- Init ----------------
 applyCrushPreset(presetSel.value);
 applyGrannyPreset(grannyPresetSel.value);
-[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl].forEach(syncFill);
+applyHamsterPreset(hamsterPresetSel.value);
+[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl, hPitchEl, hSqueakEl, hChatterEl].forEach(syncFill);
 updateModeUI();
 
 // ---------------- Mode switching ----------------
-[tabCrush, tabGranny].forEach((tab) => {
+Object.values(TABS).forEach((tab) => {
   tab.addEventListener("click", () => {
     if (recordingState) return; // don't switch mid-record
     const next = tab.dataset.mode;
@@ -84,25 +102,30 @@ updateModeUI();
 });
 
 function updateModeUI() {
-  tabCrush.classList.toggle("is-active", mode === "crush");
-  tabGranny.classList.toggle("is-active", mode === "granny");
-  panelCrush.hidden = mode !== "crush";
-  panelGranny.hidden = mode !== "granny";
+  for (const [key, tab] of Object.entries(TABS)) tab.classList.toggle("is-active", mode === key);
+  for (const [key, panel] of Object.entries(PANELS)) panel.hidden = mode !== key;
   const m = MARQUEE[mode];
   marqueeTitle.textContent = m.title;
   marqueeTitle.setAttribute("data-text", m.title);
   marqueeSub.textContent = m.sub;
   document.title = m.page;
   if (!sourceBuffer && !recordingState) {
-    hint.textContent = mode === "crush"
-      ? `PRESS START TO RECORD ${MAX_DURATION_CRUSH} SEC`
-      : `PRESS START TO RECORD UP TO ${MAX_DURATION_GRANNY} SEC`;
+    hint.textContent = restingHint();
     timer.textContent = currentMaxDuration().toFixed(1);
   }
 }
 
 function currentMaxDuration() {
-  return mode === "granny" ? MAX_DURATION_GRANNY : MAX_DURATION_CRUSH;
+  if (mode === "granny") return MAX_DURATION_GRANNY;
+  if (mode === "hamster") return MAX_DURATION_HAMSTER;
+  return MAX_DURATION_CRUSH;
+}
+
+function restingHint() {
+  const cap = currentMaxDuration();
+  return mode === "crush"
+    ? `PRESS START TO RECORD ${cap} SEC`
+    : `PRESS START TO RECORD UP TO ${cap} SEC`;
 }
 
 // ---------------- Recording ----------------
@@ -225,7 +248,7 @@ function stopRecording() {
   sourceBuffer = buf;
   sourceLabel = "recording";
 
-  setStatus(mode === "granny" ? "AGE" : "CRUNCH");
+  setStatus(statusForMode());
   hint.textContent = "TAP REC TO TRY AGAIN";
   resetBtn.disabled = false;
   scheduleRender();
@@ -253,7 +276,7 @@ async function loadFxFile(file) {
   const decoded = await audioCtx.decodeAudioData(arrayBuf.slice(0));
   sourceBuffer = decoded;
   sourceLabel = sanitizeBasename(file.name) || "fx";
-  setStatus(mode === "granny" ? "AGE" : "CRUNCH");
+  setStatus(statusForMode());
   hint.textContent = `LOADED ${truncate(file.name, 18).toUpperCase()} — TWEAK & DOWNLOAD`;
   resetBtn.disabled = false;
   timer.textContent = decoded.duration.toFixed(1);
@@ -302,7 +325,7 @@ async function render() {
       outBuf = await crush(sourceBuffer, { bits, targetSampleRate: rate });
       const prefix = sourceLabel === "recording" ? "bitcrush" : `bitcrush-${sourceLabel}`;
       filename = `${prefix}-${bits}b-${rate}hz-${timestamp()}.wav`;
-    } else {
+    } else if (mode === "granny") {
       const semitones    = +pitchEl.value;
       const wobbleDepth  = +wobbleEl.value / 100;
       const wobbleRateHz = +wobbleRateEl.value / 10;     // slider 20..90 → 2.0..9.0 Hz
@@ -310,6 +333,14 @@ async function render() {
       outBuf = await makeGranny(sourceBuffer, { semitones, wobbleDepth, wobbleRateHz, age });
       const prefix = sourceLabel === "recording" ? "granny" : `granny-${sourceLabel}`;
       const tag = grannyPresetSel.value === "custom" ? "custom" : grannyPresetSel.value;
+      filename = `${prefix}-${tag}-${timestamp()}.wav`;
+    } else {
+      const semitones = +hPitchEl.value;
+      const squeak    = +hSqueakEl.value / 100;
+      const chatter   = +hChatterEl.value / 100;
+      outBuf = await makeHamster(sourceBuffer, { semitones, squeak, chatter });
+      const prefix = sourceLabel === "recording" ? "hamster" : `hamster-${sourceLabel}`;
+      const tag = hamsterPresetSel.value === "custom" ? "custom" : hamsterPresetSel.value;
       filename = `${prefix}-${tag}-${timestamp()}.wav`;
     }
     if (token !== renderToken) return;
@@ -415,6 +446,50 @@ function matchGrannyPreset() {
 
 function approx(a, b, eps) { return Math.abs(a - b) <= eps; }
 
+// ---------------- Hamster controls ----------------
+hamsterPresetSel.addEventListener("change", () => {
+  if (hamsterPresetSel.value === "custom") return;
+  applyHamsterPreset(hamsterPresetSel.value);
+  scheduleRender();
+});
+
+[hPitchEl, hSqueakEl, hChatterEl].forEach((el) => {
+  el.addEventListener("input", () => {
+    syncFill(el);
+    updateHamsterReadouts();
+    hamsterPresetSel.value = matchHamsterPreset() || "custom";
+    scheduleRender();
+  });
+});
+
+function applyHamsterPreset(key) {
+  const p = HAMSTER_PRESETS[key];
+  if (!p) return;
+  hPitchEl.value = String(p.semitones);
+  hSqueakEl.value = String(Math.round(p.squeak * 100));
+  hChatterEl.value = String(Math.round(p.chatter * 100));
+  [hPitchEl, hSqueakEl, hChatterEl].forEach(syncFill);
+  updateHamsterReadouts();
+}
+
+function updateHamsterReadouts() {
+  hPitchVal.textContent = "+" + hPitchEl.value;
+  hSqueakVal.textContent = hSqueakEl.value + "%";
+  hChatterVal.textContent = hChatterEl.value + "%";
+}
+
+function matchHamsterPreset() {
+  const semitones = +hPitchEl.value;
+  const squeak    = +hSqueakEl.value / 100;
+  const chatter   = +hChatterEl.value / 100;
+  for (const [k, p] of Object.entries(HAMSTER_PRESETS)) {
+    if (p.semitones === semitones &&
+        approx(p.squeak, squeak, 0.005) &&
+        approx(p.chatter, chatter, 0.005)) return k;
+  }
+  return null;
+}
+
 // ---------------- Shared ----------------
 function syncFill(input) {
   const min = +input.min, max = +input.max, val = +input.value;
@@ -432,13 +507,16 @@ resetBtn.addEventListener("click", () => {
   downloadEl.setAttribute("aria-disabled", "true");
   resetBtn.disabled = true;
   setStatus("READY");
-  hint.textContent = mode === "crush"
-    ? `PRESS START TO RECORD ${MAX_DURATION_CRUSH} SEC`
-    : `PRESS START TO RECORD UP TO ${MAX_DURATION_GRANNY} SEC`;
+  hint.textContent = restingHint();
   timer.textContent = currentMaxDuration().toFixed(1);
 });
 
 function setStatus(s) { status.textContent = s; }
+function statusForMode() {
+  if (mode === "granny") return "AGE";
+  if (mode === "hamster") return "SQUEAK";
+  return "CRUNCH";
+}
 
 function sanitizeBasename(name) {
   const noExt = name.replace(/\.[^.]+$/, "");

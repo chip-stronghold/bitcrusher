@@ -112,7 +112,7 @@ body {
 /* ---------- Mode tabs ---------- */
 .mode-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .tab {
@@ -120,9 +120,9 @@ body {
   border: 0;
   cursor: pointer;
   font-family: "Press Start 2P", monospace;
-  font-size: 11px;
-  letter-spacing: 2px;
-  padding: 14px 8px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  padding: 14px 4px;
   color: var(--ink-dim);
   background: #0a0428;
   box-shadow:
@@ -131,6 +131,9 @@ body {
     0 4px 0 #000;
   border-radius: 2px;
   transition: transform 0.06s linear, color 0.1s linear;
+}
+@media (max-width: 420px) {
+  .tab { font-size: 8px; letter-spacing: 1px; padding: 12px 2px; }
 }
 .tab:hover { color: var(--ink); }
 .tab.is-active {
