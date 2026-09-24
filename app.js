@@ -1,6 +1,7 @@
 import { crush } from "./crusher.js";
 import { makeGranny, GRANNY_PRESETS } from "./granny.js";
 import { makeHamster, HAMSTER_PRESETS } from "./hamster.js";
+import { makeNewscast, NEWSCAST_PRESETS } from "./newscast.js";
 import { encodeWAV } from "./wav-encoder.js";
 
 // ---------------- DOM ----------------
@@ -19,9 +20,11 @@ const fileInput = $("file-input");
 const tabCrush = $("tab-crush");
 const tabGranny = $("tab-granny");
 const tabHamster = $("tab-hamster");
+const tabNews = $("tab-news");
 const panelCrush = $("panel-crush");
 const panelGranny = $("panel-granny");
 const panelHamster = $("panel-hamster");
+const panelNews = $("panel-news");
 const marqueeTitle = $("marquee-title");
 const marqueeSub = $("marquee-sub");
 
@@ -29,10 +32,11 @@ const MARQUEE = {
   crush:   { title: "BITCRUSHER", sub: "★ 16-BIT AUDIO CRUNCHER ★",   page: "BITCRUSHER ][" },
   granny:  { title: "GRANNY VO",  sub: "★ OLD-LADY VOICE PROCESSOR ★", page: "GRANNY VO ][" },
   hamster: { title: "HAMSTER",    sub: "★ CARTOON RODENT VOICE ★",     page: "HAMSTER ][" },
+  news:    { title: "NEWS 1960",  sub: "★ VINTAGE BROADCAST VOICE ★",  page: "NEWS 1960 ][" },
 };
 
-const TABS = { crush: tabCrush, granny: tabGranny, hamster: tabHamster };
-const PANELS = { crush: panelCrush, granny: panelGranny, hamster: panelHamster };
+const TABS = { crush: tabCrush, granny: tabGranny, hamster: tabHamster, news: tabNews };
+const PANELS = { crush: panelCrush, granny: panelGranny, hamster: panelHamster, news: panelNews };
 
 // Bitcrusher controls
 const presetSel = $("preset");
@@ -61,10 +65,19 @@ const hPitchVal = $("h-pitch-val");
 const hSpeedVal = $("h-speed-val");
 const hSqueakVal = $("h-squeak-val");
 
+// Newscast controls
+const newsPresetSel = $("news-preset");
+const nBandEl = $("n-band");
+const nSquashEl = $("n-squash");
+const nNoiseEl = $("n-noise");
+const nWowEl = $("n-wow");
+const NEWS_SLIDERS = [nBandEl, nSquashEl, nNoiseEl, nWowEl];
+
 // ---------------- State ----------------
 const MAX_DURATION_CRUSH = 5;    // sec
 const MAX_DURATION_GRANNY = 15;  // sec (room for a full VO line)
 const MAX_DURATION_HAMSTER = 10; // sec (short cartoon lines)
+const MAX_DURATION_NEWS = 15;    // sec (a full bulletin line)
 
 const PRESETS = {
   clean:     { bits: 16, rate: 44100 },
@@ -73,7 +86,7 @@ const PRESETS = {
   destroyed: { bits: 4,  rate: 8000  },
 };
 
-let mode = "crush";                // "crush" | "granny" | "hamster"
+let mode = "crush";                // "crush" | "granny" | "hamster" | "news"
 let audioCtx = null;
 let workletReady = false;
 let recordingState = null;
@@ -86,7 +99,8 @@ let sourceLabel = "recording";
 applyCrushPreset(presetSel.value);
 applyGrannyPreset(grannyPresetSel.value);
 applyHamsterPreset(hamsterPresetSel.value);
-[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl, hPitchEl, hSpeedEl, hSqueakEl].forEach(syncFill);
+applyNewsPreset(newsPresetSel.value);
+[bitsEl, rateEl, pitchEl, wobbleEl, wobbleRateEl, ageEl, hPitchEl, hSpeedEl, hSqueakEl, ...NEWS_SLIDERS].forEach(syncFill);
 updateModeUI();
 
 // ---------------- Mode switching ----------------
@@ -118,6 +132,7 @@ function updateModeUI() {
 function currentMaxDuration() {
   if (mode === "granny") return MAX_DURATION_GRANNY;
   if (mode === "hamster") return MAX_DURATION_HAMSTER;
+  if (mode === "news") return MAX_DURATION_NEWS;
   return MAX_DURATION_CRUSH;
 }
 
@@ -125,6 +140,7 @@ function restingHint() {
   const cap = currentMaxDuration();
   if (mode === "crush") return `PRESS START TO RECORD ${cap} SEC`;
   if (mode === "hamster") return `SPEAK SLOW & CLEAR — UP TO ${cap} SEC`;
+  if (mode === "news") return `READ YOUR COPY — UP TO ${cap} SEC`;
   return `PRESS START TO RECORD UP TO ${cap} SEC`;
 }
 
@@ -334,6 +350,12 @@ async function render() {
       const prefix = sourceLabel === "recording" ? "granny" : `granny-${sourceLabel}`;
       const tag = grannyPresetSel.value === "custom" ? "custom" : grannyPresetSel.value;
       filename = `${prefix}-${tag}-${timestamp()}.wav`;
+    } else if (mode === "news") {
+      const opts = newsOpts();
+      outBuf = await makeNewscast(sourceBuffer, opts);
+      const prefix = sourceLabel === "recording" ? "news1960" : `news1960-${sourceLabel}`;
+      const tag = newsPresetSel.value === "custom" ? "custom" : newsPresetSel.value;
+      filename = `${prefix}-${tag}-${timestamp()}.wav`;
     } else {
       const semitones = +hPitchEl.value;
       const speed     = +hSpeedEl.value / 100;
@@ -490,6 +512,54 @@ function matchHamsterPreset() {
   return null;
 }
 
+// ---------------- Newscast controls ----------------
+newsPresetSel.addEventListener("change", () => {
+  if (newsPresetSel.value === "custom") return;
+  applyNewsPreset(newsPresetSel.value);
+  scheduleRender();
+});
+
+NEWS_SLIDERS.forEach((el) => {
+  el.addEventListener("input", () => {
+    syncFill(el);
+    updateNewsReadouts();
+    newsPresetSel.value = matchNewsPreset() || "custom";
+    scheduleRender();
+  });
+});
+
+function newsOpts() {
+  return {
+    band:   +nBandEl.value / 100,
+    squash: +nSquashEl.value / 100,
+    noise:  +nNoiseEl.value / 100,
+    wow:    +nWowEl.value / 100,
+  };
+}
+
+function applyNewsPreset(key) {
+  const p = NEWSCAST_PRESETS[key];
+  if (!p) return;
+  nBandEl.value = String(Math.round(p.band * 100));
+  nSquashEl.value = String(Math.round(p.squash * 100));
+  nNoiseEl.value = String(Math.round(p.noise * 100));
+  nWowEl.value = String(Math.round(p.wow * 100));
+  NEWS_SLIDERS.forEach(syncFill);
+  updateNewsReadouts();
+}
+
+function updateNewsReadouts() {
+  NEWS_SLIDERS.forEach((el) => { $(el.id + "-val").textContent = el.value + "%"; });
+}
+
+function matchNewsPreset() {
+  const o = newsOpts();
+  for (const [k, p] of Object.entries(NEWSCAST_PRESETS)) {
+    if (["band", "squash", "noise", "wow"].every((key) => approx(p[key], o[key], 0.005))) return k;
+  }
+  return null;
+}
+
 // ---------------- Shared ----------------
 function syncFill(input) {
   const min = +input.min, max = +input.max, val = +input.value;
@@ -515,6 +585,7 @@ function setStatus(s) { status.textContent = s; }
 function statusForMode() {
   if (mode === "granny") return "AGE";
   if (mode === "hamster") return "SQUEAK";
+  if (mode === "news") return "ON AIR";
   return "CRUNCH";
 }
 

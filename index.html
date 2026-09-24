@@ -24,6 +24,7 @@
       <button type="button" id="tab-crush" class="tab is-active" data-mode="crush">BITCRUSHER</button>
       <button type="button" id="tab-granny" class="tab" data-mode="granny">GRANNY VO</button>
       <button type="button" id="tab-hamster" class="tab" data-mode="hamster">HAMSTER</button>
+      <button type="button" id="tab-news" class="tab" data-mode="news">NEWS 1960</button>
     </nav>
 
     <section class="screen" aria-label="recorder">
@@ -147,6 +148,44 @@
         <label class="lbl" for="h-squeak">SQUEAK</label>
         <input id="h-squeak" class="slider" type="range" min="0" max="100" step="1" value="55">
         <output id="h-squeak-val" class="readout">55%</output>
+      </div>
+    </section>
+
+    <section class="panel mode-panel" id="panel-news" aria-label="1960 newscast voice controls" hidden>
+      <div class="panel-row">
+        <label class="lbl" for="news-preset">PRESET</label>
+        <div class="select-wrap">
+          <select id="news-preset" class="select">
+            <option value="network" selected>NETWORK — STUDIO</option>
+            <option value="newsreel">NEWSREEL — CINEMA</option>
+            <option value="wireless">WIRELESS — AM RADIO</option>
+            <option value="custom">CUSTOM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="n-band">BAND</label>
+        <input id="n-band" class="slider" type="range" min="0" max="100" step="1" value="25">
+        <output id="n-band-val" class="readout">25%</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="n-squash">SQUASH</label>
+        <input id="n-squash" class="slider" type="range" min="0" max="100" step="1" value="50">
+        <output id="n-squash-val" class="readout">50%</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="n-noise">NOISE</label>
+        <input id="n-noise" class="slider" type="range" min="0" max="100" step="1" value="15">
+        <output id="n-noise-val" class="readout">15%</output>
+      </div>
+
+      <div class="panel-row slider-row">
+        <label class="lbl" for="n-wow">WOW</label>
+        <input id="n-wow" class="slider" type="range" min="0" max="100" step="1" value="10">
+        <output id="n-wow-val" class="readout">10%</output>
       </div>
     </section>
 

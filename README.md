@@ -11,6 +11,7 @@ Three modes are available via the top tab strip:
 - **BITCRUSHER** — quantize bit depth + sample-and-hold decimation. 5-second recording cap.
 - **GRANNY VO** — voice processor that pitches up, adds vibrato/wobble, thins the EQ, and softly saturates. Built for cutting old-lady character VO lines. 15-second recording cap. No bitcrushing applied.
 - **HAMSTER** — cartoon rodent voice done the Alvin-and-the-Chipmunks way: varispeed (tape speed-up), so pitch, formants, and talking speed rise together. The SPEED slider controls how much of the natural speed-up to keep. Speak slowly on the take for best results. 10-second recording cap.
+- **NEWS 1960** — vintage newsreader / newsreel voice: ribbon-mic chest, narrow broadcast band with a mid honk, valve saturation, a heavy levelling amp into a peak limiter, plus tape wow and hiss/hum/crackle. Presets NETWORK (studio desk), NEWSREEL (cinema bulletin), WIRELESS (AM radio). Sliders: BAND, SQUASH, NOISE, WOW. 15-second recording cap.
 
 ## Run locally
 

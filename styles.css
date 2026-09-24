@@ -112,7 +112,7 @@ body {
 /* ---------- Mode tabs ---------- */
 .mode-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 .tab {
@@ -133,7 +133,9 @@ body {
   transition: transform 0.06s linear, color 0.1s linear;
 }
 @media (max-width: 420px) {
-  .tab { font-size: 8px; letter-spacing: 1px; padding: 12px 2px; }
+  .mode-tabs { gap: 6px; }
+  .tab { font-size: 7px; letter-spacing: 0.5px; padding: 12px 2px; white-space: nowrap; }
+  .tab.is-active::after { content: none; }
 }
 .tab:hover { color: var(--ink); }
 .tab.is-active {
